@@ -30,6 +30,16 @@ export default function CaptureScreen() {
     };
   }, []);
 
+  const openExternal = async (url: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) return;
+      await Linking.openURL(url);
+    } catch {
+      // Keep UX silent in shell phase; source text is still visible.
+    }
+  };
+
   return (
     <ScreenShell title="Capture" subtitle="Text, URL, and image entry (mock first).">
       {loading && (
@@ -55,7 +65,7 @@ export default function CaptureScreen() {
           <View key={item.id} style={styles.row}>
             <Text style={styles.kind}>{item.kind.toUpperCase()}</Text>
             {item.sourceUrl ? (
-              <TouchableOpacity onPress={() => Linking.openURL(item.sourceUrl!)}>
+              <TouchableOpacity onPress={() => openExternal(item.sourceUrl!)}>
                 <Text style={[styles.text, styles.link]} numberOfLines={1}>{item.content}</Text>
               </TouchableOpacity>
             ) : (

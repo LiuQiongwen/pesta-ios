@@ -30,6 +30,16 @@ export default function SearchScreen() {
     };
   }, []);
 
+  const openExternal = async (url: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) return;
+      await Linking.openURL(url);
+    } catch {
+      // Keep UX silent in shell phase; source text remains readable.
+    }
+  };
+
   return (
     <ScreenShell title="Search" subtitle="RAG-ready UI shell with mock results.">
       {loading && (
@@ -53,7 +63,7 @@ export default function SearchScreen() {
           <View key={item.id} style={styles.result}>
             <Text style={styles.type}>{item.type}</Text>
             {item.sourceUrl ? (
-              <TouchableOpacity onPress={() => Linking.openURL(item.sourceUrl!)}>
+              <TouchableOpacity onPress={() => openExternal(item.sourceUrl!)}>
                 <Text style={[styles.text, styles.link]} numberOfLines={2}>
                   {item.text}
                 </Text>

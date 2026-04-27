@@ -13,24 +13,31 @@ export function EdgeLine({ x1, y1, x2, y2 }: Props) {
   const dy = y2 - y1;
   const length = Math.sqrt(dx * dx + dy * dy);
   const angle = Math.atan2(dy, dx);
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
   return (
     <View
       style={[
-        styles.line,
+        styles.root,
         {
-          width: length,
-          left: x1,
-          top: y1,
-          transform: [{ rotateZ: `${angle}rad` }],
+          left: midX,
+          top: midY,
+          transform: [{ translateX: -length / 2 }, { rotateZ: `${angle}rad` }],
         },
       ]}
-    />
+    >
+      <View style={[styles.line, { width: length }]} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  line: {
+  root: {
     position: 'absolute',
+    height: 1,
+    justifyContent: 'center',
+  },
+  line: {
     height: 1,
     backgroundColor: 'rgba(148, 163, 184, 0.26)',
   },

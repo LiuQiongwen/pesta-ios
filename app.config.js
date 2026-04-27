@@ -24,7 +24,7 @@ export default {
         backgroundColor: '#01040d',
       },
     },
-    plugins: ['expo-secure-store'],
+    plugins: ['expo-router', 'expo-secure-store'],
     extra: {
       WEB_URL:           process.env.WEB_URL           ?? 'https://your-pesta-site.com',
       SUPABASE_URL:      process.env.SUPABASE_URL      ?? '',

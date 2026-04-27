@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity, Linking, Alert,
   StyleSheet, FlatList, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ interface Result {
   title:   string;
   excerpt: string;
   type:    string;
+  link?:   string;
 }
 
 export default function SearchScreen() {
@@ -45,11 +46,36 @@ export default function SearchScreen() {
       notesRows.map(item => ({
         id: item.id,
         title: item.title,
-        excerpt: item.content,
-        type: 'NOTE',
+        excerpt: item.attachmentUrl || item.sourceUrl || item.content,
+        type:
+          item.sourceType === 'image'
+            ? 'IMAGE'
+            : item.sourceType === 'url'
+              ? 'URL'
+              : 'NOTE',
+        link:
+          item.sourceType === 'image'
+            ? item.attachmentUrl ?? undefined
+            : item.sourceType === 'url'
+              ? item.sourceUrl ?? undefined
+              : undefined,
       }))
     );
     setUsedFallback(notesRows.length > 0);
+  };
+
+  const openResult = async (item: Result) => {
+    if (!item.link) return;
+    try {
+      const can = await Linking.canOpenURL(item.link);
+      if (!can) {
+        Alert.alert('无法打开链接', item.link);
+        return;
+      }
+      await Linking.openURL(item.link);
+    } catch {
+      Alert.alert('打开失败', '链接格式无效或系统暂不可用');
+    }
   };
 
   return (
@@ -92,9 +118,15 @@ export default function SearchScreen() {
             keyExtractor={item => item.id}
             contentContainerStyle={styles.list}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.resultCard} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.resultCard}
+                activeOpacity={item.link ? 0.7 : 1}
+                onPress={() => openResult(item)}
+                disabled={!item.link}
+              >
                 <View style={styles.resultHeader}>
                   <Text style={styles.resultType}>{item.type}</Text>
+                  {item.link ? <Text style={styles.openHint}>打开</Text> : null}
                 </View>
                 <Text style={styles.resultTitle}>{item.title}</Text>
                 <Text style={styles.resultExcerpt} numberOfLines={2}>
@@ -176,6 +208,12 @@ const styles = StyleSheet.create({
     gap:             6,
   },
   resultHeader: { flexDirection: 'row' },
+  openHint: {
+    marginLeft: 8,
+    color: COLORS.textDim,
+    fontSize: 10,
+    fontFamily: 'monospace',
+  },
   resultType: {
     fontSize:          10,
     color:             COLORS.accent,

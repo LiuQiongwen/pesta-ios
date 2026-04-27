@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Linking, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -37,18 +37,24 @@ export default function CaptureScreen() {
 
   const buildPayload = () => {
     if (mode === 'text') {
-      return { kind: 'capture', content: text.trim() };
+      return { kind: 'capture', sourceType: 'text', content: text.trim(), title: text.trim().slice(0, 60) };
     }
     if (mode === 'url') {
       const normalized = url.trim();
       const isValid = /^https?:\/\/\S+/i.test(normalized);
       if (!isValid) return { kind: 'url', content: '', invalid: true as const };
-      return { kind: 'url', content: normalized };
+      return {
+        kind: 'url',
+        sourceType: 'url',
+        content: normalized,
+        sourceUrl: normalized,
+        title: normalized.slice(0, 60),
+      };
     }
     const normalized = imageUri.trim();
     const isValid = /^(https?:\/\/|file:\/\/|content:\/\/)/i.test(normalized);
     if (!isValid) return { kind: 'image', content: '', invalid: true as const };
-    return { kind: 'image', content: normalized };
+    return { kind: 'image', sourceType: 'image', content: normalized };
   };
 
   const submit = async () => {
@@ -79,14 +85,14 @@ export default function CaptureScreen() {
       }
     }
 
-    const content =
-      mode === 'text'
-        ? finalContent
-        : mode === 'url'
-          ? `[URL]\n${finalContent}`
-          : `[IMAGE_URL]\n${finalContent}`;
-
-    const res = await createNote(content, payload.kind);
+    const res = await createNote({
+      content: mode === 'text' ? payload.content : payload.sourceType === 'url' ? `URL capture: ${finalContent}` : 'Image capture',
+      kind: payload.kind,
+      sourceType: payload.sourceType,
+      sourceUrl: payload.sourceType === 'url' ? finalContent : null,
+      attachmentUrl: payload.sourceType === 'image' ? finalContent : null,
+      title: payload.title,
+    });
     if (res.ok) {
       setText('');
       setUrl('');
@@ -134,6 +140,19 @@ export default function CaptureScreen() {
     if (result.canceled || !result.assets?.[0]?.uri) return;
     setMode('image');
     setImageUri(result.assets[0].uri);
+  };
+
+  const openExternal = async (url: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        Alert.alert('无法打开链接', url);
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('打开失败', '链接格式无效或系统暂不可用');
+    }
   };
 
   return (
@@ -257,9 +276,20 @@ export default function CaptureScreen() {
               recentCaptures.map(item => (
                 <View key={item.id} style={styles.recentItem}>
                   <Text style={styles.recentKind}>{(item.kind || 'capture').toUpperCase()}</Text>
-                  <Text style={styles.recentText} numberOfLines={2}>
-                    {item.content || item.title}
-                  </Text>
+                  {item.attachmentUrl || item.sourceUrl ? (
+                    <TouchableOpacity
+                      onPress={() => openExternal(item.attachmentUrl || item.sourceUrl || '')}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.recentText, styles.recentLink]} numberOfLines={2}>
+                        {item.attachmentUrl || item.sourceUrl}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.recentText} numberOfLines={2}>
+                      {item.content || item.title}
+                    </Text>
+                  )}
                 </View>
               ))
             )}
@@ -442,5 +472,9 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 12,
     lineHeight: 18,
+  },
+  recentLink: {
+    color: COLORS.accent,
+    textDecorationLine: 'underline',
   },
 });

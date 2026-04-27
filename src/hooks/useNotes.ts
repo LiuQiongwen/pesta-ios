@@ -6,6 +6,9 @@ export interface NoteItem {
   title: string;
   content: string;
   kind: string;
+  sourceType: string;
+  sourceUrl: string | null;
+  attachmentUrl: string | null;
   done: boolean;
   createdAt: string;
 }
@@ -19,9 +22,21 @@ function normalizeNote(row: Record<string, unknown>): NoteItem {
     title,
     content,
     kind,
+    sourceType: String(row.source_type ?? kind),
+    sourceUrl: row.source_url ? String(row.source_url) : null,
+    attachmentUrl: row.attachment_url ? String(row.attachment_url) : null,
     done: Boolean(row.done ?? false),
     createdAt: String(row.created_at ?? new Date().toISOString()),
   };
+}
+
+interface CreateNotePayload {
+  content: string;
+  kind?: string;
+  title?: string;
+  sourceType?: string;
+  sourceUrl?: string | null;
+  attachmentUrl?: string | null;
 }
 
 export function useNotes(userId?: string, universeId?: string | null) {
@@ -119,8 +134,9 @@ export function useNotes(userId?: string, universeId?: string | null) {
     }
   }, [universeId, userId]);
 
-  const createNote = useCallback(async (content: string, kind: string = 'capture') => {
-    const text = content.trim();
+  const createNote = useCallback(async (payload: CreateNotePayload) => {
+    const text = payload.content.trim();
+    const kind = payload.kind ?? 'capture';
     if (!userId) return { ok: false, message: '未登录' };
     if (!text) return { ok: false, message: '内容为空' };
 
@@ -131,8 +147,11 @@ export function useNotes(userId?: string, universeId?: string | null) {
         user_id: userId,
         universe_id: universeId ?? null,
         content: text,
-        title: text.slice(0, 60),
+        title: payload.title?.trim() || text.slice(0, 60),
         kind,
+        source_type: payload.sourceType ?? kind,
+        source_url: payload.sourceUrl ?? null,
+        attachment_url: payload.attachmentUrl ?? null,
       }).select().maybeSingle();
       if (insertError) throw insertError;
       if (data) {

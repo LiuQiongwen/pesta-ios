@@ -15,6 +15,12 @@ const INSIGHT_TYPES = [
   { key: 'Actions',  label: '行动项', color: '#44ff99', icon: '▶' },
 ] as const;
 
+const SOURCE_TYPES = [
+  { key: 'text', label: '文本捕获', color: '#66f0ff' },
+  { key: 'url', label: 'URL 捕获', color: '#b496ff' },
+  { key: 'image', label: '图片捕获', color: '#44ff99' },
+] as const;
+
 export default function InsightScreen() {
   const { user } = useAuth();
   const { listNotes, error } = useNotes(user?.id, null);
@@ -32,6 +38,14 @@ export default function InsightScreen() {
     }, {});
   }, [rows]);
 
+  const countBySourceType = useMemo(() => {
+    return rows.reduce<Record<string, number>>((acc, item) => {
+      const key = (item.sourceType || 'text').toLowerCase();
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [rows]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
@@ -43,6 +57,19 @@ export default function InsightScreen() {
           <Text style={styles.label}>INSIGHT</Text>
           <Text style={styles.title}>洞察</Text>
           <Text style={styles.subtitle}>AI 提炼的知识精华</Text>
+        </View>
+
+        <View style={styles.sourceWrap}>
+          <Text style={styles.sourceTitle}>捕获来源分布</Text>
+          <View style={styles.sourceRow}>
+            {SOURCE_TYPES.map(item => (
+              <View key={item.key} style={styles.sourceItem}>
+                <View style={[styles.sourceDot, { backgroundColor: item.color }]} />
+                <Text style={styles.sourceLabel}>{item.label}</Text>
+                <Text style={styles.sourceCount}>{countBySourceType[item.key] ?? 0}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         {/* 洞见类型卡片 */}
@@ -155,6 +182,38 @@ const styles = StyleSheet.create({
   reportTitle: { fontSize: 15, fontWeight: '600', color: COLORS.text },
   reportSub:   { fontSize: 12, color: COLORS.textDim, marginTop: 2 },
   reportArrow: { fontSize: 22, color: COLORS.textDim },
+  sourceWrap: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    gap: 10,
+  },
+  sourceTitle: {
+    color: COLORS.textDim,
+    fontSize: 11,
+    fontFamily: 'monospace',
+    letterSpacing: 1.6,
+  },
+  sourceRow: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  sourceItem: {
+    minWidth: '30%',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  sourceDot: { width: 8, height: 8, borderRadius: 4 },
+  sourceLabel: { color: COLORS.textDim, fontSize: 11 },
+  sourceCount: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
 
   hint: {
     fontSize:   11,

@@ -21,6 +21,9 @@ Run these files in Supabase SQL Editor:
 - `supabase/captures_bucket.sql`
   - Creates `captures` storage bucket
   - Adds per-user write/update policy and public read policy
+- `supabase/notes_capture_fields.sql`
+  - Adds `source_type/source_url/attachment_url` to `notes`
+  - Enables structured capture storage without string prefixes
 
 ## 3) Core Feature Smoke Tests (Real Device)
 

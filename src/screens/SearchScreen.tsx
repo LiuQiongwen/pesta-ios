@@ -66,12 +66,16 @@ export default function SearchScreen() {
 
   const openResult = async (item: Result) => {
     if (!item.link) return;
-    const can = await Linking.canOpenURL(item.link);
-    if (!can) {
-      Alert.alert('无法打开链接', item.link);
-      return;
+    try {
+      const can = await Linking.canOpenURL(item.link);
+      if (!can) {
+        Alert.alert('无法打开链接', item.link);
+        return;
+      }
+      await Linking.openURL(item.link);
+    } catch {
+      Alert.alert('打开失败', '链接格式无效或系统暂不可用');
     }
-    await Linking.openURL(item.link);
   };
 
   return (

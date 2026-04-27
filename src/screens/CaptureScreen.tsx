@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Linking, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -142,6 +142,19 @@ export default function CaptureScreen() {
     setImageUri(result.assets[0].uri);
   };
 
+  const openExternal = async (url: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        Alert.alert('无法打开链接', url);
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('打开失败', '链接格式无效或系统暂不可用');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
@@ -263,9 +276,20 @@ export default function CaptureScreen() {
               recentCaptures.map(item => (
                 <View key={item.id} style={styles.recentItem}>
                   <Text style={styles.recentKind}>{(item.kind || 'capture').toUpperCase()}</Text>
-                  <Text style={styles.recentText} numberOfLines={2}>
-                    {item.attachmentUrl || item.sourceUrl || item.content || item.title}
-                  </Text>
+                  {item.attachmentUrl || item.sourceUrl ? (
+                    <TouchableOpacity
+                      onPress={() => openExternal(item.attachmentUrl || item.sourceUrl || '')}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.recentText, styles.recentLink]} numberOfLines={2}>
+                        {item.attachmentUrl || item.sourceUrl}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.recentText} numberOfLines={2}>
+                      {item.content || item.title}
+                    </Text>
+                  )}
                 </View>
               ))
             )}
@@ -448,5 +472,9 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 12,
     lineHeight: 18,
+  },
+  recentLink: {
+    color: COLORS.accent,
+    textDecorationLine: 'underline',
   },
 });

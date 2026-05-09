@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import {
   View, StyleSheet,
-  TouchableOpacity, Text, ActivityIndicator, Platform,
+  TouchableOpacity, Text, ActivityIndicator, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -10,37 +10,17 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { APP_CONFIG, COLORS } from '@/lib/constants';
+import { buildNativeBridgeScript, getWebOrigin, isTrustedWebUrl } from '@/lib/nativeWebBridge';
 import type { MainTabParams } from '@/navigation/types';
 
 type Nav = BottomTabNavigationProp<MainTabParams>;
+const TRUSTED_WEB_ORIGIN = getWebOrigin(APP_CONFIG.WEB_URL);
 
 /**
  * 注入到网页的脚本：
  * - 传递 token，触发 pesta-native-auth 事件让网页跳过登录
  * - 暴露 window.pestaNativeNavigate(route) 供网页跳转原生 Tab
  */
-function buildInjectScript(token: string | undefined): string {
-  return `
-    (function() {
-      try {
-        window.__PESTA_NATIVE__ = true;
-        ${token ? `
-        window.__PESTA_TOKEN__ = ${JSON.stringify(token)};
-        window.dispatchEvent(new CustomEvent('pesta-native-auth', {
-          detail: { token: ${JSON.stringify(token)} }
-        }));
-        ` : ''}
-        window.pestaNativeNavigate = function(route, params) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'NAVIGATE',
-            payload: { route: route, params: params || {} }
-          }));
-        };
-      } catch(e) {}
-    })();
-    true;
-  `;
-}
 
 // 支持的原生路由（网页端传的 route 字符串 → Tab name）
 const ROUTE_MAP: Record<string, keyof MainTabParams> = {
@@ -71,7 +51,7 @@ export default function WebViewScreen() {
   // Tab 重新获得焦点时刷新注入（token 可能已刷新）
   useFocusEffect(
     useCallback(() => {
-      webRef.current?.injectJavaScript(buildInjectScript(token));
+      webRef.current?.injectJavaScript(buildNativeBridgeScript(token, TRUSTED_WEB_ORIGIN));
     }, [token])
   );
 
@@ -79,6 +59,15 @@ export default function WebViewScreen() {
     setCanGoBack(state.canGoBack);
     setCurUrl(state.url);
   };
+
+  const onShouldStartLoad = useCallback((request: { url: string }) => {
+    if (isTrustedWebUrl(request.url, TRUSTED_WEB_ORIGIN)) return true;
+
+    Linking.openURL(request.url).catch(() => {
+      setError(`无法打开外部链接: ${request.url}`);
+    });
+    return false;
+  }, []);
 
   // 接收网页 postMessage
   const onMessage = useCallback((event: { nativeEvent: { data: string } }) => {
@@ -127,8 +116,8 @@ export default function WebViewScreen() {
         source={{ uri: APP_CONFIG.WEB_URL }}
         style={styles.webview}
 
-        injectedJavaScriptBeforeContentLoaded={buildInjectScript(token)}
-        injectedJavaScript={buildInjectScript(token)}
+        injectedJavaScriptBeforeContentLoaded={buildNativeBridgeScript(token, TRUSTED_WEB_ORIGIN)}
+        injectedJavaScript={buildNativeBridgeScript(token, TRUSTED_WEB_ORIGIN)}
 
         onLoadStart={() => { setLoading(true);  setError(null); }}
         onLoadEnd={()   =>   setLoading(false)}
@@ -136,6 +125,7 @@ export default function WebViewScreen() {
           setLoading(false);
           setError(nativeEvent.description || '未知错误');
         }}
+        onShouldStartLoadWithRequest={onShouldStartLoad}
         onNavigationStateChange={onNavChange}
         onMessage={onMessage}
 

@@ -1,16 +1,18 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { APP_CONFIG, COLORS } from '@/lib/constants';
+import { buildNativeBridgeScript, getWebOrigin, isTrustedWebUrl } from '@/lib/nativeWebBridge';
 import type { MainTabParams } from '@/navigation/types';
 
 type Nav = BottomTabNavigationProp<MainTabParams>;
 
 const STAR_MAP_URL = APP_CONFIG.WEB_URL + '/app';
+const TRUSTED_WEB_ORIGIN = getWebOrigin(APP_CONFIG.WEB_URL);
 
 const ROUTE_MAP: Record<string, keyof MainTabParams> = {
   Capture: 'Capture',
@@ -25,29 +27,6 @@ const ROUTE_MAP: Record<string, keyof MainTabParams> = {
   action:  'Action',
 };
 
-function buildInjectScript(token: string | undefined): string {
-  return `
-    (function() {
-      try {
-        window.__PESTA_NATIVE__ = true;
-        ${token ? `
-        window.__PESTA_TOKEN__ = ${JSON.stringify(token)};
-        window.dispatchEvent(new CustomEvent('pesta-native-auth', {
-          detail: { token: ${JSON.stringify(token)} }
-        }));
-        ` : ''}
-        window.pestaNativeNavigate = function(route, params) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'NAVIGATE',
-            payload: { route: route, params: params || {} }
-          }));
-        };
-      } catch(e) {}
-    })();
-    true;
-  `;
-}
-
 export default function StarMapScreen() {
   const { session } = useAuth();
   const navigation  = useNavigation<Nav>();
@@ -58,9 +37,18 @@ export default function StarMapScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      webRef.current?.injectJavaScript(buildInjectScript(token));
+      webRef.current?.injectJavaScript(buildNativeBridgeScript(token, TRUSTED_WEB_ORIGIN));
     }, [token])
   );
+
+  const onShouldStartLoad = useCallback((request: { url: string }) => {
+    if (isTrustedWebUrl(request.url, TRUSTED_WEB_ORIGIN)) return true;
+
+    Linking.openURL(request.url).catch(() => {
+      setError(`无法打开外部链接: ${request.url}`);
+    });
+    return false;
+  }, []);
 
   const onMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
@@ -98,8 +86,8 @@ export default function StarMapScreen() {
         source={{ uri: STAR_MAP_URL }}
         style={styles.webview}
 
-        injectedJavaScriptBeforeContentLoaded={buildInjectScript(token)}
-        injectedJavaScript={buildInjectScript(token)}
+        injectedJavaScriptBeforeContentLoaded={buildNativeBridgeScript(token, TRUSTED_WEB_ORIGIN)}
+        injectedJavaScript={buildNativeBridgeScript(token, TRUSTED_WEB_ORIGIN)}
 
         onLoadStart={() => { setLoading(true); setError(null); }}
         onLoadEnd={()   =>  setLoading(false)}
@@ -107,6 +95,7 @@ export default function StarMapScreen() {
           setLoading(false);
           setError(nativeEvent.description || '未知错误');
         }}
+        onShouldStartLoadWithRequest={onShouldStartLoad}
         onMessage={onMessage}
 
         allowsBackForwardNavigationGestures={false}

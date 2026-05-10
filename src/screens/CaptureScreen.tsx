@@ -10,13 +10,20 @@ import { useNotes } from '@/hooks/useNotes';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 
+const CAPTURES_BUCKET = 'captures';
+const CAPTURE_STORAGE_REF_PREFIX = `storage://${CAPTURES_BUCKET}/`;
+
+function toCaptureStorageRef(path: string): string {
+  return `${CAPTURE_STORAGE_REF_PREFIX}${path}`;
+}
+
 export default function CaptureScreen() {
   const { user } = useAuth();
   const [mode, setMode] = useState<'text' | 'url' | 'image'>('text');
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
   const [imageUri, setImageUri] = useState('');
-  const [lastImageUrl, setLastImageUrl] = useState('');
+  const [lastImageRef, setLastImageRef] = useState('');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -56,23 +63,29 @@ export default function CaptureScreen() {
     if (payload.invalid || !payload.content) return;
 
     let finalContent = payload.content;
+    let imageContentLabel: 'IMAGE_URL' | 'IMAGE_PATH' = 'IMAGE_URL';
     if (mode === 'image') {
       if (!user?.id) return;
       if (/^(file:\/\/|content:\/\/)/i.test(payload.content)) {
         setUploading(true);
+        setCameraError(null);
         try {
           const path = `captures/${user.id}/${Date.now()}.jpg`;
           const resp = await fetch(payload.content);
           const blob = await resp.blob();
           const { error: upErr } = await supabase.storage
-            .from('captures')
+            .from(CAPTURES_BUCKET)
             .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
           if (upErr) {
             setCameraError(`上传失败: ${upErr.message}`);
             return;
           }
-          const { data: urlData } = supabase.storage.from('captures').getPublicUrl(path);
-          if (urlData?.publicUrl) finalContent = urlData.publicUrl;
+          finalContent = toCaptureStorageRef(path);
+          imageContentLabel = 'IMAGE_PATH';
+        } catch (e) {
+          const message = e instanceof Error ? e.message : '读取或上传图片失败';
+          setCameraError(`上传失败: ${message}`);
+          return;
         } finally {
           setUploading(false);
         }
@@ -84,14 +97,14 @@ export default function CaptureScreen() {
         ? finalContent
         : mode === 'url'
           ? `[URL]\n${finalContent}`
-          : `[IMAGE_URL]\n${finalContent}`;
+          : `[${imageContentLabel}]\n${finalContent}`;
 
     const res = await createNote(content, payload.kind);
     if (res.ok) {
       setText('');
       setUrl('');
       setImageUri('');
-      if (mode === 'image') setLastImageUrl(finalContent);
+      setLastImageRef(mode === 'image' ? finalContent : '');
       setSaved(true);
       listNotes({ limit: 5 });
       setTimeout(() => setSaved(false), 1400);
@@ -232,7 +245,7 @@ export default function CaptureScreen() {
             <Text style={styles.submitText}>{loading || uploading ? '处理中...' : '送入宇宙 ✦'}</Text>
           </TouchableOpacity>
           {saved && <Text style={styles.successText}>已写入 Supabase</Text>}
-          {saved && lastImageUrl && <Text style={styles.successText}>图片URL已保存</Text>}
+          {saved && lastImageRef && <Text style={styles.successText}>图片引用已保存</Text>}
           {!saved && mode === 'url' && url.trim().length > 0 && !/^https?:\/\/\S+/i.test(url.trim()) && (
             <Text style={styles.errorText}>URL 需以 http:// 或 https:// 开头</Text>
           )}

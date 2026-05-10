@@ -5,11 +5,15 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values (
   'captures',
   'captures',
-  true,
+  false,
   10485760,
   array['image/jpeg', 'image/png', 'image/webp']
 )
-on conflict (id) do nothing;
+on conflict (id) do update
+set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "captures_insert_own" on storage.objects;
 create policy "captures_insert_own"
@@ -39,8 +43,13 @@ with check (
 );
 
 drop policy if exists "captures_select_public" on storage.objects;
-create policy "captures_select_public"
+drop policy if exists "captures_select_own" on storage.objects;
+create policy "captures_select_own"
 on storage.objects
 for select
-to public
-using (bucket_id = 'captures');
+to authenticated
+using (
+  bucket_id = 'captures'
+  and (storage.foldername(name))[1] = 'captures'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
